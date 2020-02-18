@@ -35,6 +35,33 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
     return;
   }
 
+ /* 
+  * Get the payload type 
+  * ARP = 2054  IPv4 = 5048 
+  * Do we need to handle MAC address as well? 
+  */
+
+  uint16_t ether_type = ethertype(packet.data());
+
+  switch(ether_type)
+  {
+    case ethertype_arp:
+      std::cerr << "ARP--RIGHT!" << std::endl;
+      /*
+       * Handle ARP request  
+       */
+      break;
+    case ethertype_ip:
+      std::cerr << "IPv4--RIGHT!" << std::endl;
+      /*
+       * Handle IPv4 request  
+       */
+      break;
+    default:
+      std::cerr << "Unrecognized Ethernet type " << ethertype << std::endl; 
+      break;
+  }
+  
   std::cerr << getRoutingTable() << std::endl;
 
   // FILL THIS IN
