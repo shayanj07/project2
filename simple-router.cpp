@@ -35,30 +35,79 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
     return;
   }
 
- /* 
-  * Get the payload type 
-  * ARP = 2054  IPv4 = 5048 
-  * Do we need to handle MAC address as well? 
-  */
+  	print_hdr_eth(packet.data());
+	std::cerr << "MAC IS " << macToString(packet) << std::endl;
+
+
+//////////////////////////////////////////////////////////////////////////	
+   /* 
+	* not sure whether findIfaceByMac(packet) behaves correctly
+	* will have to check later without using a broadcasting address
+	*/
+	const Interface* mac = findIfaceByMac(packet);
+
+  	if (mac == nullptr && macToString(packet) != "ff:ff:ff:ff:ff:ff") 
+  	{
+    	std::cerr << "Received packet, but MAC is unknown, ignoring" << std::endl;
+    	return;
+  	}
+//////////////////////////////////////////////////////////////////////////
+
+
+  //static_assert(std::is_same<unsigned char, uint8_t>::value, "uint8_t is not unsigned char");
 
   uint16_t ether_type = ethertype(packet.data());
 
   switch(ether_type)
   {
+  /*
+   * Handle ARP request  
+   */
     case ethertype_arp:
+    {
       std::cerr << "ARP--RIGHT!" << std::endl;
-      /*
-       * Handle ARP request  
-       */
+      /* Need to extract the ARP header from the Ethernet header -- How?*/
+
+      arp_hdr *arphdr = (arp_hdr *) packet.data();
+
+      //std::cerr << "ARP: " << arphdr->arp_sip<< std::endl;
+
+
+
+      if (ntohs(arphdr->arp_op) == arp_op_request)
+      {
+      	std::cerr << "Received ARP request!" << std::endl;
+      }
+      else if (ntohs(arphdr->arp_op) == arp_op_reply)
+      {
+      	std::cerr << "Received ARP reply!" << std::endl;
+      }
+      else
+      {
+      	std::cerr << "Unrecognized arp oper" << std::endl;
+      }
       break;
+  	}
+  /*
+   * Handle IPv4 request  
+   */
     case ethertype_ip:
+    {
       std::cerr << "IPv4--RIGHT!" << std::endl;
-      /*
-       * Handle IPv4 request  
-       */
+     /*
+      * need to calculate checksum
+      */
+      // uint8_t *ip_pkt = packet.data() + sizeof(ethernet_hdr);
+
+      ip_hdr *iphdr = (ip_hdr *) packet.data();
+      if (iphdr->ip_sum == cksum(packet.data(), sizeof(packet)))
+      {
+      	std::cerr << "Checksum is good" << std::endl;
+      }
       break;
+    }
     default:
-      std::cerr << "Unrecognized Ethernet type " << ethertype << std::endl; 
+      std::cerr << "Unrecognized Ethernet type" << std::endl; 
       break;
   }
   
