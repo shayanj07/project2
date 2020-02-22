@@ -67,8 +67,8 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
     {
       std::cerr << "ARP--RIGHT!" << std::endl;
       /* Need to extract the ARP header from the Ethernet header -- How?*/
-
-      arp_hdr *arphdr = (arp_hdr *) packet.data();
+      std::vector<unsigned char> payload(packet.begin() + sizeof(ethernet_hdr), packet.end());
+      arp_hdr *arphdr = (arp_hdr *) payload.data();
 
       //std::cerr << "ARP: " << arphdr->arp_sip<< std::endl;
 
