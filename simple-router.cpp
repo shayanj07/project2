@@ -41,8 +41,12 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
 
 //////////////////////////////////////////////////////////////////////////	
    /* 
-	* not sure whether findIfaceByMac(packet) behaves correctly
-	* will have to check later without using a broadcasting address
+   TODO:
+   1. check if findIfaceByMac(packet) behaves correctly 
+   without using a broadcasting address
+   2. ("FF" vs "ff"?)
+   3. also need to drop packages with destination hardware address that is 
+   not the corresponding MAC address of the interface
 	*/
 	const Interface* mac = findIfaceByMac(packet);
 
