@@ -56,7 +56,9 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
 
   //static_assert(std::is_same<unsigned char, uint8_t>::value, "uint8_t is not unsigned char");
 
-  uint16_t ether_type = ethertype(packet.data());
+  	uint16_t ether_type = ethertype(packet.data());
+    /* Need to extract the header from the Ethernet frame */
+   	std::vector<unsigned char> payload(packet.begin() + sizeof(ethernet_hdr), packet.end());
 
   switch(ether_type)
   {
@@ -66,17 +68,56 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
     case ethertype_arp:
     {
       std::cerr << "ARP--RIGHT!" << std::endl;
-      /* Need to extract the ARP header from the Ethernet header -- How?*/
-      std::vector<unsigned char> payload(packet.begin() + sizeof(ethernet_hdr), packet.end());
       arp_hdr *arphdr = (arp_hdr *) payload.data();
-
-      //std::cerr << "ARP: " << arphdr->arp_sip<< std::endl;
-
-
 
       if (ntohs(arphdr->arp_op) == arp_op_request)
       {
       	std::cerr << "Received ARP request!" << std::endl;
+
+
+      	if (iface->ip == arphdr->arp_tip)	/* target address matches our own address */
+      	{
+      		// uint8_t *response = (uint8_t *) malloc(sizeof(ethernet_hdr) + sizeof(arp_hdr));
+      		// Buffer* response = (Buffer *) malloc(sizeof(ethernet_hdr) + sizeof(arp_hdr));
+      		Buffer response(sizeof(ethernet_hdr) + sizeof(arp_hdr));
+
+      		/* the size of the frame is the ethernet header + the ARP payload */
+      		ethernet_hdr *ehthdr = (ethernet_hdr *) response.data();
+      		std::vector<unsigned char> arp_and_eth(response.begin() + sizeof(ethernet_hdr), response.end());
+      		arp_hdr *arphdres = (arp_hdr *) (arp_and_eth.data());
+      		// arp_hdr *arphdres = (arp_hdr *) (response + sizeof(ethernet_hdr));
+
+	        /* length/format of addresses is the same */
+	        arphdres->arp_hrd = arphdr->arp_hrd;
+	        arphdres->arp_pro = arphdr->arp_pro;
+	        arphdres->arp_hln = arphdr->arp_hln;
+	        arphdres->arp_pln = arphdr->arp_pln;
+
+	        /* this should be a reply, not request */
+	        arphdres->arp_op = htons(arp_op_reply);
+
+	        /* reverse the direction towards sender */
+	        arphdres->arp_sip = arphdr->arp_tip; 
+	        arphdres->arp_tip = arphdr->arp_sip;
+
+	        memcpy(arphdres->arp_sha, iface->addr.data(), ETHER_ADDR_LEN);
+	        memcpy(arphdres->arp_tha, arphdr->arp_sha, ETHER_ADDR_LEN);
+
+	        /* fill out the ethernet header as well */
+	        memcpy(ehthdr->ether_shost, arphdres->arp_sha, ETHER_ADDR_LEN );
+	        memcpy(ehthdr->ether_dhost, arphdres->arp_tha, ETHER_ADDR_LEN );
+	        ehthdr->ether_type = htons(ethertype_arp);
+
+	        sendPacket(response, iface->name);
+	        std::cerr << "ARP request sent" << std::endl;
+      	}
+      	else
+      	{
+      		std::cerr << "ARP request dropped" << std::endl;
+      	}
+
+
+
       }
       else if (ntohs(arphdr->arp_op) == arp_op_reply)
       {
@@ -97,13 +138,14 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
      /*
       * need to calculate checksum
       */
-      // uint8_t *ip_pkt = packet.data() + sizeof(ethernet_hdr);
-
-      ip_hdr *iphdr = (ip_hdr *) packet.data();
-      if (iphdr->ip_sum == cksum(packet.data(), sizeof(packet)))
+      ip_hdr *iphdr = (ip_hdr *) payload.data();
+      if (iphdr->ip_sum != cksum(payload.data(), sizeof(payload)))
+      	/* or if (!cksum(payload.data(), sizeof(payload))) ? */
       {
-      	std::cerr << "Checksum is good" << std::endl;
+      	std::cerr << "Checksum failed, ignoring" << std::endl;
+      	return;
       }
+      
       break;
     }
     default:
