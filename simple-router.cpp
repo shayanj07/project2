@@ -19,11 +19,19 @@
 
 #include <fstream>
 
+// #include "arp-cache.hpp"
+
+
 namespace simple_router {
+
+
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 // IMPLEMENT THIS METHOD
+
+//std::shared_ptr<ArpRequest> insertArpEntry(const Buffer& mac, uint32_t ip);
+
 void
 SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
 {
@@ -86,7 +94,7 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
       		Buffer response(sizeof(ethernet_hdr) + sizeof(arp_hdr));
 
       		/* the size of the frame is the ethernet header + the ARP payload */
-      		ethernet_hdr *ehthdr = (ethernet_hdr *) response.data();
+      		ethernet_hdr *ethhdr = (ethernet_hdr *) response.data();
       		std::vector<unsigned char> arp_and_eth(response.begin() + sizeof(ethernet_hdr), response.end());
       		arp_hdr *arphdres = (arp_hdr *) (arp_and_eth.data());
       		// arp_hdr *arphdres = (arp_hdr *) (response + sizeof(ethernet_hdr));
@@ -108,9 +116,9 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
 	        memcpy(arphdres->arp_tha, arphdr->arp_sha, ETHER_ADDR_LEN);
 
 	        /* fill out the ethernet header as well */
-	        memcpy(ehthdr->ether_shost, arphdres->arp_sha, ETHER_ADDR_LEN );
-	        memcpy(ehthdr->ether_dhost, arphdres->arp_tha, ETHER_ADDR_LEN );
-	        ehthdr->ether_type = htons(ethertype_arp);
+	        memcpy(ethhdr->ether_shost, arphdres->arp_sha, ETHER_ADDR_LEN );
+	        memcpy(ethhdr->ether_dhost, arphdres->arp_tha, ETHER_ADDR_LEN );
+	        ethhdr->ether_type = htons(ethertype_arp);
 
 	        sendPacket(response, iface->name);
 	        std::cerr << "ARP request sent" << std::endl;
@@ -121,12 +129,30 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
       	}
 
 
-
       }
       else if (ntohs(arphdr->arp_op) == arp_op_reply)
       {
       	std::cerr << "Received ARP reply!" << std::endl;
+
+      	if (iface->ip == arphdr->arp_tip)	/* target address matches our own address */
+      	{
+
+      		std::vector<unsigned char> mac(packet.at(6), packet.at(11));
+      	   /*
+      	   	* TODO: fix the scope situation for the insertArpEntry function call 
+      		*/
+      		std::shared_ptr<ArpRequest> arp_rep = simple_router::ArpCache::insertArpEntry(mac, ntohl(arphdr->arp_sip));
+
+	        //sendPacket(response, iface->name);
+	        std::cerr << "ARP reply sent" << std::endl;
+      	}
+      	else
+      	{
+      		std::cerr << "ARP reply dropped" << std::endl;
+      	}
+
       }
+
       else
       {
       	std::cerr << "Unrecognized arp oper" << std::endl;
