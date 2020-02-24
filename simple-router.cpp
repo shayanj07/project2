@@ -58,7 +58,7 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
 	*/
 	const Interface* mac = findIfaceByMac(packet);
 
-  	if (mac == nullptr && macToString(packet) != "FF:FF:FF:FF:FF:FF") 
+  	if (mac == nullptr && macToString(packet) != "ff:ff:ff:ff:ff:ff") 
   	{
     	std::cerr << "Received packet, but MAC is unknown, ignoring" << std::endl;
     	return;
@@ -140,8 +140,9 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
       		std::vector<unsigned char> mac(packet.at(6), packet.at(11));
       	   /*
       	   	* TODO: fix the scope situation for the insertArpEntry function call 
+      	   	* what about ::ArpCache::insertArpEntry...?
       		*/
-      		std::shared_ptr<ArpRequest> arp_rep = simple_router::ArpCache::insertArpEntry(mac, ntohl(arphdr->arp_sip));
+      		std::shared_ptr<ArpRequest> arp_rep = m_arp.insertArpEntry(mac, ntohl(arphdr->arp_sip));
 
 	        //sendPacket(response, iface->name);
 	        std::cerr << "ARP reply sent" << std::endl;
