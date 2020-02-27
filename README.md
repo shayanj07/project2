@@ -25,10 +25,18 @@ When POX controller is restrated, the simpler router needs to be manually stoppe
 
 This implementation is based on the original code for Stanford CS144 lab3 (https://bitbucket.org/cs144-1617/lab3).
 
-## TODO
+## Team
 
-    ###########################################################
-    ##                                                       ##
-    ## REPLACE CONTENT OF THIS FILE WITH YOUR PROJECT REPORT ##
-    ##                                                       ##
-    ###########################################################
+Name: Constance Yu
+UID: 304652651
+
+contribution: IPv4 package handling, Routing table lookup, and arp cache periodic checkup
+
+Name: Shayan Javid
+UID: 905179984
+
+contribution: ARP package handling, ICMP protocal handling
+
+## High Level Implementation
+
+## Problem
