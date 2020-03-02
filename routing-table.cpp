@@ -33,6 +33,15 @@ RoutingTable::lookup(uint32_t ip) const
 {
 
   // FILL THIS IN
+  /*TODO: need to check if the prefix matching works*/
+  for (const auto& entry : m_entries) {
+    char common_prefix = entry.dest & entry.mask;
+    // fprintf(stderr, "common prefix in entry %s is %s", ipToString(entry.dest), ipToString(common_prefix));
+    char ip_prefix = ip & entry.mask;
+    if (common_prefix == ip_prefix) {
+      return entry;
+    }
+  }
 
   throw std::runtime_error("Routing entry not found");
 }
