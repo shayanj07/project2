@@ -30,9 +30,58 @@ namespace simple_router {
 void
 ArpCache::periodicCheckArpRequestsAndCacheEntries()
 {
+  for (auto i = m_arpRequests.begin(); i != m_arpRequests.end(); i++) {
+    handleRequest(*i);
+  }
 
-  // FILL THIS IN
+  for (auto i = m_cacheEntries.begin(); i != m_cacheEntries.end();) {
+    if (!(*i)->isValid) 
+      i = m_cacheEntries.erase(i);
+    else 
+      ++i;
+  }
 
+}
+
+void
+ArpCache::handleRequest(std::shared_ptr<ArpRequest> arpreq) {
+  auto now = steady_clock::now();
+  if (now - arpreq->timeSent > seconds(1)) {
+    if (arpreq->nTimesSent >= MAX_SENT_TIME) {
+      removeRequest(arpreq);
+    }
+    else {
+      // Send arp request
+      const Interface* next_hop_iface = m_router.findIfaceByName(arpreq->packets.front().iface); //packets: PendingPacket (Buffer, iface)
+      if (!next_hop_iface) {
+        std::cerr<<"bad iii"<<std::endl;
+      }
+      Buffer arp_req(sizeof(ethernet_hdr) + sizeof(arp_hdr));
+      uint8_t* req_buf = (uint8_t*)arp_req.data();
+      ethernet_hdr* new_eth_hdr = (ethernet_hdr *)req_buf;
+      const uint8_t broadcast[ETHER_ADDR_LEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+      memcpy(new_eth_hdr->ether_dhost, broadcast, sizeof(broadcast));
+      memcpy(new_eth_hdr->ether_shost, next_hop_iface->addr.data(), ETHER_ADDR_LEN);
+      new_eth_hdr->ether_type = htons(ethertype_arp);
+
+      arp_hdr* new_arp_hdr = (arp_hdr *)(req_buf + sizeof(ethernet_hdr));
+      new_arp_hdr->arp_op = htons(arp_op_request);
+      memcpy(new_arp_hdr->arp_tha, broadcast, ETHER_ADDR_LEN);
+      new_arp_hdr->arp_tip = arpreq->ip;
+      memcpy(new_arp_hdr->arp_sha, next_hop_iface->addr.data(), ETHER_ADDR_LEN);
+      new_arp_hdr->arp_sip = next_hop_iface->ip;
+      new_arp_hdr->arp_hrd = htons(arp_hrd_ethernet);
+      new_arp_hdr->arp_pro = htons(ethertype_ip);
+      new_arp_hdr->arp_hln = 0x06;
+      new_arp_hdr->arp_pln = 0x04; 
+
+      std::cout << "ARP REPEAT REQUEST ATTEMPT" << std::endl;
+      print_hdrs(arp_req);
+      m_router.sendPacket(arp_req, next_hop_iface->name);
+      arpreq->nTimesSent++;
+      arpreq->timeSent = now;
+    }
+  }
 }
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
