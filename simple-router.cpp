@@ -71,6 +71,7 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
   //   if (i != broadAddr[i])
   //     broad_ok = false;
   // }
+
   for (int i = 0; i < ETHER_ADDR_LEN; i++) 
   {
     if (destMAC[i] != iface->addr[i])
@@ -147,7 +148,7 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
 	        ethhdr->ether_type = htons(ethertype_arp);
 
 	        sendPacket(response, iface->name);
-	        std::cerr << "ARP response sent" << std::endl;
+	        std::cerr << "ARP request sent" << std::endl;
       	}
       	else
       	{
@@ -165,30 +166,30 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
       		Buffer mac_buf(ETHER_ADDR_LEN);
       		memcpy(mac_buf.data(), arphdr->arp_sha, ETHER_ADDR_LEN); 
 
-      // record IP-MAC mapping in ARP cache
-      std::shared_ptr<ArpRequest> req = m_arp.insertArpEntry(mac_buf, arphdr->arp_sip);
+           // record IP-MAC mapping in ARP cache
+          std::shared_ptr<ArpRequest> req = m_arp.insertArpEntry(mac_buf, arphdr->arp_sip);
 
-      if (req == nullptr) 
-      {
-        fprintf(stderr, "Null packet\n");
-        return;
-      }
+          if (req == nullptr) 
+          {
+            fprintf(stderr, "Null packet\n");
+            return;
+          }
         
-      // we need to send packets on the req->packets link list
-      for (auto pkt : req->packets) 
-      {
-        Buffer PACK = pkt.packet;
+         // we need to send packets on the req->packets link list
+          for (auto pkt : req->packets) 
+          {
+            Buffer PACK = pkt.packet;
 
-        ethernet_hdr* new_eth_hdr = (ethernet_hdr*)(PACK.data());
-        memcpy(new_eth_hdr->ether_dhost, arphdr->arp_sha, ETHER_ADDR_LEN);
-        memcpy(new_eth_hdr->ether_shost, iface->addr.data(), ETHER_ADDR_LEN);
+            ethernet_hdr* new_eth_hdr = (ethernet_hdr*)(PACK.data());
+            memcpy(new_eth_hdr->ether_dhost, arphdr->arp_sha, ETHER_ADDR_LEN);
+            memcpy(new_eth_hdr->ether_shost, iface->addr.data(), ETHER_ADDR_LEN);
 
-		    std::cerr << "ARP reply sent" << std::endl;
+  		     std::cerr << "ARP reply sent" << std::endl;
 
-        // Send cached packet
-        sendPacket(PACK, iface->name);
-      }
-      m_arp.removeRequest(req);
+          // Send cached packet
+            sendPacket(PACK, iface->name);
+           }
+          m_arp.removeRequest(req);
       	}
       	else
       	{
@@ -342,23 +343,9 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
         resp_icmp_hdr->icmp_sum = 0;
         resp_icmp_hdr->icmp_sum = cksum(resp_icmp_hdr, icmp_len);
 
-        
+        std::cerr << "ICMP echo reply sent" << std::endl;
         sendPacket(resp, iface->name);
         return;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
         // std::cout << "Type 8: ICMP echo message received. sending echo reply" << std::endl;
         // /* creating a copy of the packet */
@@ -428,7 +415,8 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
         resp_ip_hdr->ip_id = htons(IP_ID++);
         resp_ip_hdr->ip_ttl = 64;
         resp_ip_hdr->ip_p = ip_protocol_icmp;
-        resp_ip_hdr->ip_src = new_iphdr->ip_dst;
+        // resp_ip_hdr->ip_src = new_iphdr->ip_dst;
+        resp_ip_hdr->ip_src = iface->ip;
         resp_ip_hdr->ip_dst = new_iphdr->ip_src;
 
         /* icmp cksum is it's entire header (including data field) */
@@ -512,11 +500,11 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
         // if the ARP entry is not found we need to cache the packet and send an ARP request
         std::shared_ptr<ArpRequest> queue_req = m_arp.queueRequest(next_hop.gw, packet, next_hop.ifName);
 
-        // if(queue_req->packets.size() > 1) 
-        // {
-        //     std::cerr << "more than one packet. ignoring" << std::endl; 
-        //     return; 
-        // }
+        if(queue_req->packets.size() > 1) 
+        {
+            std::cerr << "more than one packet. ignoring" << std::endl; 
+            return; 
+        }
         if (queue_req->nTimesSent <= 0)
         {
         queue_req->nTimesSent++;
