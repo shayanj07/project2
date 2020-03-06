@@ -35,8 +35,26 @@ contribution: IPv4 package handling, Routing table lookup, and arp cache periodi
 Name: Shayan Javid
 UID: 905179984
 
-contribution: ARP package handling, ICMP protocal handling
+contribution: ARP package handling, ICMP protocal handling, IPv4 package handling
 
 ## High Level Implementation
 
+Our router calls `handlePacket` to identify the type of the packet first. If it is an IP
+packet, we checks if the destination address is our router. If so, this is a ICMP packet.
+We can handle the `ping` and `traceroute` commands separately. If the IP destination is not
+our router, we lookup our routing table and find the next hop and interface entry. If we do
+not know the IP of the next hop, we check our ARP cache and do ARP request and response handling
+if necessary. Here, if the needed requirements for forwarding packets are not met, we queue it. 
+The logic if ARP handling is followed: if the ARP request is to the router, it generates an ARP
+response. If it is an ARP reply, we update ARP cache and forward package.
+
 ## Problem
+
+The first and most obvious problem we ran into was misunderstanding the architecture of our router.
+TA Tianxiang was really helpful because he went through the structure of project 2 in discussion.
+We were having trouble displaying the correct address when we received the ICMP `traceroute` command at first. Instead of displaying each hop, our router would only display the last hop
+address incorrectly. We debugged this by revisiting how we update the address in the router and
+found and fixed the bug. The longest prefix matching was also another method we did not understand
+properly before and thus implemented error code. It did not work and when we tried to transport
+files, our router would always go core dump... Then we realized we need to keep track of the
+*longest* prefix instead of just the first matching prefix.
