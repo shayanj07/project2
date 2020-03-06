@@ -153,50 +153,19 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
         return;
       }
         
-      // Send all packets on the req->packets linked list
-      for (auto pac : req->packets) {
-        fprintf(stderr, "This is a queued packet\n");
-        Buffer pacc = pac.packet;  // @40
+         // we need to send packets on the req->packets link list
+          for (auto pkt : req->packets) 
+          {
+            Buffer PACK = pkt.packet;
 
-        ethernet_hdr* new_eth_hdr = reinterpret_cast<ethernet_hdr*>(pacc.data());
-        memcpy(new_eth_hdr->ether_dhost, arphdr->arp_sha, ETHER_ADDR_LEN);
-        memcpy(new_eth_hdr->ether_shost, iface->addr.data(), ETHER_ADDR_LEN);
+            ethernet_hdr* new_eth_hdr = (ethernet_hdr*)(PACK.data());
+            memcpy(new_eth_hdr->ether_dhost, arphdr->arp_sha, ETHER_ADDR_LEN);
+            memcpy(new_eth_hdr->ether_shost, iface->addr.data(), ETHER_ADDR_LEN);
 
-        ip_hdr* iphdr = reinterpret_cast<ip_hdr*>(pacc.data() + sizeof(ethernet_hdr));
-        iphdr->ip_sum = 0;
-        iphdr->ip_sum = cksum(iphdr, sizeof(*iphdr));
-        iphdr->ip_ttl--;
+  		     std::cerr << "ARP reply sent" << std::endl;
 
-        std::cout << "--------------ARP REPLY -> SEND CACHED PACKETS--------------" << std::endl;
-        print_hdrs(pacc);
-
-        // Send cached packet
-        sendPacket(pacc, iface->name);
-      		// Buffer mac_buf(ETHER_ADDR_LEN);
-      		// memcpy(mac_buf.data(), arphdr->arp_sha, ETHER_ADDR_LEN); 
-
-        //    // record IP-MAC mapping in ARP cache
-        //   std::shared_ptr<ArpRequest> req = m_arp.insertArpEntry(mac_buf, arphdr->arp_sip);
-
-        //   if (req == nullptr) 
-        //   {
-        //     fprintf(stderr, "Null packet\n");
-        //     return;
-        //   }
-        
-        //  // we need to send packets on the req->packets link list
-        //   for (auto pkt : req->packets) 
-        //   {
-        //     Buffer PACK = pkt.packet;
-
-        //     ethernet_hdr* new_eth_hdr = (ethernet_hdr*)(PACK.data());
-        //     memcpy(new_eth_hdr->ether_dhost, arphdr->arp_sha, ETHER_ADDR_LEN);
-        //     memcpy(new_eth_hdr->ether_shost, iface->addr.data(), ETHER_ADDR_LEN);
-
-  		    //  std::cerr << "ARP reply sent" << std::endl;
-
-        //   // Send cached packet
-        //     sendPacket(PACK, iface->name);
+          // Send cached packet
+            sendPacket(PACK, iface->name);
            }
           m_arp.removeRequest(req);
       	}
