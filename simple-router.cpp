@@ -60,18 +60,6 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
   bool broad_ok = true;
 
 
-  // for (auto i : destMAC)
-  //  {
-  //   if (i != iface->addr[i])
-  //     MAC_ok = false;
-  // }
-
-  // for (auto i : broadAddr) 
-  // {
-  //   if (i != broadAddr[i])
-  //     broad_ok = false;
-  // }
-
   for (int i = 0; i < ETHER_ADDR_LEN; i++) 
   {
     if (destMAC[i] != iface->addr[i])
@@ -110,16 +98,6 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
 
       	if (iface->ip == arphdr->arp_tip)	/* target address matches our own address */
       	{
-      		// uint8_t *response = (uint8_t *) malloc(sizeof(ethernet_hdr) + sizeof(arp_hdr));
-      		// Buffer* response = (Buffer *) malloc(sizeof(ethernet_hdr) + sizeof(arp_hdr));
-      		// Buffer response(sizeof(ethernet_hdr) + sizeof(arp_hdr));
-
-      		// /* the size of the frame is the ethernet header + the ARP payload */
-      		// ethernet_hdr *ethhdr = (ethernet_hdr *) response.data();
-      		// std::vector<unsigned char> arp_and_eth(response.begin() + sizeof(ethernet_hdr), response.end());
-      		// arp_hdr *arphdres = (arp_hdr *) (arp_and_eth.data());
-      		// arp_hdr *arphdres = (arp_hdr *) (response + sizeof(ethernet_hdr));
-
 
           /////////
         	Buffer response (sizeof(ethernet_hdr) + sizeof(arp_hdr));
@@ -163,31 +141,62 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
 
       	if (iface->ip == arphdr->arp_tip)	/* target address matches our own address */
       	{
-      		Buffer mac_buf(ETHER_ADDR_LEN);
-      		memcpy(mac_buf.data(), arphdr->arp_sha, ETHER_ADDR_LEN); 
 
-           // record IP-MAC mapping in ARP cache
-          std::shared_ptr<ArpRequest> req = m_arp.insertArpEntry(mac_buf, arphdr->arp_sip);
+      	fprintf(stderr, "This is ARP reply\n");
+      	Buffer mac_buf(ETHER_ADDR_LEN);  // Piazza @48
+      	memcpy(mac_buf.data(), arphdr->arp_sha, ETHER_ADDR_LEN); 
 
-          if (req == nullptr) 
-          {
-            fprintf(stderr, "Null packet\n");
-            return;
-          }
+      // record IP-MAC mapping in ARP cache
+      std::shared_ptr<ArpRequest> req = m_arp.insertArpEntry(mac_buf, arphdr->arp_sip);   
+      if (req == nullptr) {
+        fprintf(stderr, "Null packet\n");
+        return;
+      }
         
-         // we need to send packets on the req->packets link list
-          for (auto pkt : req->packets) 
-          {
-            Buffer PACK = pkt.packet;
+      // Send all packets on the req->packets linked list
+      for (auto pac : req->packets) {
+        fprintf(stderr, "This is a queued packet\n");
+        Buffer pacc = pac.packet;  // @40
 
-            ethernet_hdr* new_eth_hdr = (ethernet_hdr*)(PACK.data());
-            memcpy(new_eth_hdr->ether_dhost, arphdr->arp_sha, ETHER_ADDR_LEN);
-            memcpy(new_eth_hdr->ether_shost, iface->addr.data(), ETHER_ADDR_LEN);
+        ethernet_hdr* new_eth_hdr = reinterpret_cast<ethernet_hdr*>(pacc.data());
+        memcpy(new_eth_hdr->ether_dhost, arphdr->arp_sha, ETHER_ADDR_LEN);
+        memcpy(new_eth_hdr->ether_shost, iface->addr.data(), ETHER_ADDR_LEN);
 
-  		     std::cerr << "ARP reply sent" << std::endl;
+        ip_hdr* iphdr = reinterpret_cast<ip_hdr*>(pacc.data() + sizeof(ethernet_hdr));
+        iphdr->ip_sum = 0;
+        iphdr->ip_sum = cksum(iphdr, sizeof(*iphdr));
+        iphdr->ip_ttl--;
 
-          // Send cached packet
-            sendPacket(PACK, iface->name);
+        std::cout << "--------------ARP REPLY -> SEND CACHED PACKETS--------------" << std::endl;
+        print_hdrs(pacc);
+
+        // Send cached packet
+        sendPacket(pacc, iface->name);
+      		// Buffer mac_buf(ETHER_ADDR_LEN);
+      		// memcpy(mac_buf.data(), arphdr->arp_sha, ETHER_ADDR_LEN); 
+
+        //    // record IP-MAC mapping in ARP cache
+        //   std::shared_ptr<ArpRequest> req = m_arp.insertArpEntry(mac_buf, arphdr->arp_sip);
+
+        //   if (req == nullptr) 
+        //   {
+        //     fprintf(stderr, "Null packet\n");
+        //     return;
+        //   }
+        
+        //  // we need to send packets on the req->packets link list
+        //   for (auto pkt : req->packets) 
+        //   {
+        //     Buffer PACK = pkt.packet;
+
+        //     ethernet_hdr* new_eth_hdr = (ethernet_hdr*)(PACK.data());
+        //     memcpy(new_eth_hdr->ether_dhost, arphdr->arp_sha, ETHER_ADDR_LEN);
+        //     memcpy(new_eth_hdr->ether_shost, iface->addr.data(), ETHER_ADDR_LEN);
+
+  		    //  std::cerr << "ARP reply sent" << std::endl;
+
+        //   // Send cached packet
+        //     sendPacket(PACK, iface->name);
            }
           m_arp.removeRequest(req);
       	}
@@ -256,12 +265,12 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
 
   		  /* icmp header */
   		  resp_icmp_hdr->icmp_type = 3;
-  		  resp_icmp_hdr->icmp_code = 0;
+  		  resp_icmp_hdr->icmp_code = 3;
   		  resp_icmp_hdr->unused = 0; /* these two fields aren't used */
   		  resp_icmp_hdr->next_mtu = 0; /* fill with 0's to standardize */
 
-  		  /* the data field of the icmp contains the entire IP header and
-  		   * first 8 bytes of the payload that caused the error message */
+  		   // the data field of the icmp contains the entire IP header and
+  		   // * first 8 bytes of the payload that caused the error message 
   		  memcpy( resp_icmp_hdr->data, ((uint8_t *) ip_Hdr), ICMP_DATA_SIZE );
 
   		  /* ip header */
@@ -304,71 +313,72 @@ SimpleRouter::handlePacket(const Buffer& packet, const std::string& inIface)
       // Create ICMP echo reply
       if (icmphdr->icmp_type == 8) 
       {
-        ethernet_hdr *eth_hdr = (ethernet_hdr *) packet.data(); 
-        ip_hdr *iphdr = (ip_hdr *) (packet.data() + sizeof(ethernet_hdr));
+        // ethernet_hdr *eth_hdr = (ethernet_hdr *) packet.data(); 
+        // ip_hdr *iphdr = (ip_hdr *) (packet.data() + sizeof(ethernet_hdr));
 
-        Buffer resp (sizeof(ethernet_hdr) + ntohs(iphdr->ip_len));
-        ethernet_hdr *resp_eth_hdr = (ethernet_hdr *) resp.data(); 
-        ip_hdr *resp_ip_hdr = (ip_hdr *) (resp.data() + sizeof(ethernet_hdr));
-        icmp_hdr *resp_icmp_hdr = (icmp_hdr *) (resp.data() + sizeof(ethernet_hdr) + sizeof(ip_hdr));
+        // Buffer resp (sizeof(ethernet_hdr) + ntohs(iphdr->ip_len));
+        // ethernet_hdr *resp_eth_hdr = (ethernet_hdr *) resp.data(); 
+        // ip_hdr *resp_ip_hdr = (ip_hdr *) (resp.data() + sizeof(ethernet_hdr));
+        // icmp_hdr *resp_icmp_hdr = (icmp_hdr *) (resp.data() + sizeof(ethernet_hdr) + sizeof(ip_hdr));
 
-        /* eth header */
-        memcpy( resp_eth_hdr->ether_dhost, eth_hdr->ether_shost, ETHER_ADDR_LEN ); 
-        memcpy( resp_eth_hdr->ether_shost, eth_hdr->ether_dhost, ETHER_ADDR_LEN ); 
-        resp_eth_hdr->ether_type = htons(ethertype_ip);
+        // /* eth header */
+        // memcpy( resp_eth_hdr->ether_dhost, eth_hdr->ether_shost, ETHER_ADDR_LEN ); 
+        // memcpy( resp_eth_hdr->ether_shost, eth_hdr->ether_dhost, ETHER_ADDR_LEN ); 
+        // resp_eth_hdr->ether_type = htons(ethertype_ip);
 
-        /* ip header */
-        resp_ip_hdr->ip_v = 4; /* IPv4 */
-        resp_ip_hdr->ip_hl = 5; /* minimum header length */
-        resp_ip_hdr->ip_tos = iphdr->ip_tos; 
-        resp_ip_hdr->ip_off = htons(IP_DF);
-        resp_ip_hdr->ip_len = htons((uint16_t) sizeof(ip_hdr) + icmp_len); 
-        resp_ip_hdr->ip_id = htons(IP_ID++);
-        resp_ip_hdr->ip_ttl = 64;
-        resp_ip_hdr->ip_p = ip_protocol_icmp;
-        resp_ip_hdr->ip_src = iphdr->ip_dst;
-        resp_ip_hdr->ip_dst = iphdr->ip_src;
+        // /* ip header */
+        // resp_ip_hdr->ip_v = 4; /* IPv4 */
+        // resp_ip_hdr->ip_hl = 5; /* minimum header length */
+        // resp_ip_hdr->ip_tos = iphdr->ip_tos; 
+        // resp_ip_hdr->ip_off = htons(IP_DF);
+        // resp_ip_hdr->ip_len = htons((uint16_t) sizeof(ip_hdr) + icmp_len); 
+        // resp_ip_hdr->ip_id = htons(IP_ID++);
+        // resp_ip_hdr->ip_ttl = 64;
+        // resp_ip_hdr->ip_p = ip_protocol_icmp;
+        // resp_ip_hdr->ip_src = iphdr->ip_dst;
+        // resp_ip_hdr->ip_dst = iphdr->ip_src;
 
-        /* icmp packet should be exactly the same */
-        resp_icmp_hdr->icmp_type = 0;
-        resp_icmp_hdr->icmp_code = 0;
-        /* place the old payload in the new one */ 
-        memcpy(((uint8_t *) resp_icmp_hdr) + sizeof(icmp_hdr), 
-               ((uint8_t *) icmphdr) + sizeof(icmp_hdr),
-               icmp_len - sizeof(icmp_hdr));
+        // /* icmp packet should be exactly the same */
+        // resp_icmp_hdr->icmp_type = 0;
+        // resp_icmp_hdr->icmp_code = 0;
+        // /* place the old payload in the new one */ 
+        // memcpy(((uint8_t *) resp_icmp_hdr) + sizeof(icmp_hdr), 
+        //        ((uint8_t *) icmphdr) + sizeof(icmp_hdr),
+        //        icmp_len - sizeof(icmp_hdr));
 
-        /* calculate checksums */
-        resp_ip_hdr->ip_sum = 0;
-        resp_ip_hdr->ip_sum = cksum(resp_ip_hdr, sizeof(ip_hdr));
-        resp_icmp_hdr->icmp_sum = 0;
-        resp_icmp_hdr->icmp_sum = cksum(resp_icmp_hdr, icmp_len);
+        // /* calculate checksums */
+        // resp_ip_hdr->ip_sum = 0;
+        // resp_ip_hdr->ip_sum = cksum(resp_ip_hdr, sizeof(ip_hdr));
+        // resp_icmp_hdr->icmp_sum = 0;
+        // resp_icmp_hdr->icmp_sum = cksum(resp_icmp_hdr, icmp_len);
 
-        std::cerr << "ICMP echo reply sent" << std::endl;
-        sendPacket(resp, iface->name);
+        // std::cerr << "ICMP echo reply sent" << std::endl;
+        // sendPacket(resp, iface->name);
+        // return;
+
+        std::cout << "Type 8: ICMP echo message received. sending echo reply" << std::endl;
+        /* creating a copy of the packet */
+        Buffer echo_reply = packet;
+        ethernet_hdr* ethhdr = (ethernet_hdr*)(echo_reply.data());
+
+        memcpy(ethhdr->ether_dhost, ehdr->ether_shost, ETHER_ADDR_LEN);
+        memcpy(ethhdr->ether_shost, iface->addr.data(), ETHER_ADDR_LEN);
+
+        ip_hdr* new_ip_hdr = (ip_hdr*)(echo_reply.data() + sizeof(ethernet_hdr));
+        new_ip_hdr->ip_sum = 0;
+        new_ip_hdr->ip_sum = cksum(new_ip_hdr, sizeof(*new_ip_hdr));
+        new_ip_hdr->ip_dst = iphdr->ip_src;
+        new_ip_hdr->ip_src = iphdr->ip_dst;
+
+        icmp_hdr* new_icmp_hdr = (icmp_hdr*)(echo_reply.data() + sizeof(ethernet_hdr) + sizeof(ip_hdr));
+        new_icmp_hdr->icmp_type = 0;
+        new_icmp_hdr->icmp_sum = 0;
+        new_icmp_hdr->icmp_sum = cksum(new_icmp_hdr, icmp_len);
+
+        std::cout << "ICMP echo reply sent" << std::endl;
+        // Send ICMP echo_reply
+        sendPacket(echo_reply, iface->name);
         return;
-
-        // std::cout << "Type 8: ICMP echo message received. sending echo reply" << std::endl;
-        // /* creating a copy of the packet */
-        // Buffer echo_reply = packet;
-        // ethernet_hdr* ethhdr = (ethernet_hdr*)(echo_reply.data());
-
-        // memcpy(ethhdr->ether_dhost, ehdr->ether_shost, ETHER_ADDR_LEN);
-        // memcpy(ethhdr->ether_shost, iface->addr.data(), ETHER_ADDR_LEN);
-
-        // ip_hdr* new_ip_hdr = (ip_hdr*)(echo_reply.data() + sizeof(ethernet_hdr));
-        // new_ip_hdr->ip_sum = 0;
-        // new_ip_hdr->ip_sum = cksum(new_ip_hdr, sizeof(*new_ip_hdr));
-        // new_ip_hdr->ip_dst = iphdr->ip_src;
-        // new_ip_hdr->ip_src = iphdr->ip_dst;
-
-        // icmp_hdr* new_icmp_hdr = (icmp_hdr*)(echo_reply.data() + sizeof(ethernet_hdr) + sizeof(ip_hdr));
-        // new_icmp_hdr->icmp_type = 0;
-        // new_icmp_hdr->icmp_sum = 0;
-        // new_icmp_hdr->icmp_sum = cksum(new_icmp_hdr, icmp_len);
-
-        // std::cout << "ICMP echo reply sent" << std::endl;
-        // // Send ICMP echo_reply
-        // sendPacket(echo_reply, iface->name);
       }
     }  // end IP
 
