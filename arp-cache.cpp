@@ -34,13 +34,13 @@ ArpCache::periodicCheckArpRequestsAndCacheEntries()
     handleRequest(*i);
   }
 
-  for (auto i = m_cacheEntries.begin(); i != m_cacheEntries.end();) {
-    if (!(*i)->isValid) 
-      i = m_cacheEntries.erase(i);
-    else 
+  auto i = m_cacheEntries.begin();
+  while(i != m_cacheEntries.end()) {
+    if ((*i)->isValid)
       ++i;
+    else 
+      i = m_cacheEntries.erase(i);
   }
-
 }
 
 void
@@ -54,28 +54,30 @@ ArpCache::handleRequest(std::shared_ptr<ArpRequest> arpreq) {
       // Send arp request
       const Interface* next_hop_iface = m_router.findIfaceByName(arpreq->packets.front().iface); //packets: PendingPacket (Buffer, iface)
       if (!next_hop_iface) {
-        std::cerr<<"bad iii"<<std::endl;
+        std::cerr << "No next hope iface" << std::endl;
       }
       Buffer arp_req(sizeof(ethernet_hdr) + sizeof(arp_hdr));
+      const uint8_t broadcast[ETHER_ADDR_LEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
       uint8_t* req_buf = (uint8_t*)arp_req.data();
       ethernet_hdr* new_eth_hdr = (ethernet_hdr *)req_buf;
-      const uint8_t broadcast[ETHER_ADDR_LEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
       memcpy(new_eth_hdr->ether_dhost, broadcast, sizeof(broadcast));
       memcpy(new_eth_hdr->ether_shost, next_hop_iface->addr.data(), ETHER_ADDR_LEN);
       new_eth_hdr->ether_type = htons(ethertype_arp);
 
       arp_hdr* new_arp_hdr = (arp_hdr *)(req_buf + sizeof(ethernet_hdr));
+      new_arp_hdr->arp_hrd = htons(arp_hrd_ethernet);
+      new_arp_hdr->arp_pro = htons(ethertype_ip);
+      new_arp_hdr->arp_hln = 0x06;
       new_arp_hdr->arp_op = htons(arp_op_request);
       memcpy(new_arp_hdr->arp_tha, broadcast, ETHER_ADDR_LEN);
       new_arp_hdr->arp_tip = arpreq->ip;
       memcpy(new_arp_hdr->arp_sha, next_hop_iface->addr.data(), ETHER_ADDR_LEN);
       new_arp_hdr->arp_sip = next_hop_iface->ip;
-      new_arp_hdr->arp_hrd = htons(arp_hrd_ethernet);
-      new_arp_hdr->arp_pro = htons(ethertype_ip);
-      new_arp_hdr->arp_hln = 0x06;
-      new_arp_hdr->arp_pln = 0x04; 
+      new_arp_hdr->arp_pln = 0x04;
 
-      std::cout << "ARP REPEAT REQUEST ATTEMPT" << std::endl;
+      std::cout << "ATTEMPT ARP REPEAT REQUEST" << std::endl;
       print_hdrs(arp_req);
       m_router.sendPacket(arp_req, next_hop_iface->name);
       arpreq->nTimesSent++;
