@@ -30,12 +30,12 @@ This implementation is based on the original code for Stanford CS144 lab3 (https
 Name: Constance Yu
 UID: 304652651
 
-contribution: IPv4 package handling, Routing table lookup, and arp cache periodic checkup
+contribution: IPv4 packet handling, Routing table lookup, and arp cache periodic checkup
 
 Name: Shayan Javid
 UID: 905179984
 
-contribution: ARP package handling, ICMP protocal handling, IPv4 package handling
+contribution: ARP packet handling, ICMP protocal handling, IPv4 packet handling
 
 ## High Level Implementation
 
@@ -48,7 +48,7 @@ if necessary. Here, if the needed requirements for forwarding packets are not me
 The logic if ARP handling is followed: if the ARP request is to the router, it generates an ARP
 response. If it is an ARP reply, we update ARP cache and forward package.
 
-## Problem
+## Problems
 
 The first and most obvious problem we ran into was misunderstanding the architecture of our router.
 TA Tianxiang was really helpful because he went through the structure of project 2 in discussion.
@@ -58,3 +58,27 @@ found and fixed the bug. The longest prefix matching was also another method we 
 properly before and thus implemented error code. It did not work and when we tried to transport
 files, our router would always go core dump... Then we realized we need to keep track of the
 *longest* prefix instead of just the first matching prefix.
+
+## Details
+This project consisted of completing a router that operated both at the network layer and the
+link layer. When receiving a packet on an Ethernet interface, it first checks the
+destination MAC address; if the MAC address does not match the packet is dropped
+immediately. Else, the type field of the packet is checked.
+If the packet is an ARP packet, the ARP header is extracted, and if the ARP packet
+is a ARP request, then the router sends a reply to the source
+MAC address only if the ARP target IP matches the router’s IP.
+Else if the ARP packet is a reply, then the table is updated. And, whenever the ARP table is
+change the queued packets are sent out.
+
+Next if the packet is an IP packet, the destination IP in the header is checked to determine the packet's
+destination. If destined to the router, it should be an ICMP packet. Otherwise, the router, using, ICMP type
+3 message, sends an unreachable port message. If the packet is not
+destined to the router, the routing table is looked up for the next-hop IP that the packet
+needs to be sent to. This is based on the final destination IP address. 
+
+Last funtionality is sending an ARP reply in the case that the next hop IP is not found in the table or is incomplete.
+In this case, an ARP query is sent out. The packet that is needed to be forwarded is added to a queue behind the ARP request,
+so when the request comes this packet can be sent. Once an ARP reply arrives only one ARP request is sent for each destination 
+address that its IP or MAC address needs to be determined.
+
+The final router is capable of handling ping, traceroute, small, medium, and large file transfers between the client and server(s).
